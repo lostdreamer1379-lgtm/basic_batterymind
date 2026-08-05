@@ -7,9 +7,10 @@ function toImpactLabel(shapValue) {
   return 'Low contribution'
 }
 
-function normalizePrediction(prediction = {}) {
-  const rawSoh = Number(prediction.soh)
-  const sohPercentage = Number(prediction.soh_percentage)
+function normalizePrediction(prediction) {
+  const safePrediction = prediction && typeof prediction === 'object' ? prediction : {}
+  const rawSoh = Number(safePrediction.soh)
+  const sohPercentage = Number(safePrediction.soh_percentage)
   const soh =
     Number.isFinite(sohPercentage)
       ? sohPercentage
@@ -18,7 +19,7 @@ function normalizePrediction(prediction = {}) {
         : 0
 
   return {
-    ...prediction,
+    ...safePrediction,
     soh,
   }
 }

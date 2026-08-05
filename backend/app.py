@@ -38,6 +38,7 @@ from recommendation import BatteryRecommendation
 app = Flask(__name__)
 CORS(app)
 
+
 #########################################################
 # BatteryMind Modules
 #########################################################
@@ -46,9 +47,43 @@ feature_engine = BatteryFeatureEngine(window_size=300)
 
 predictor = BatteryPredictor()
 
+import inspect
+print("=== model_predictor.py location ===")
+print(inspect.getfile(type(predictor)))
+print("=== predict() source ===")
+print(inspect.getsource(predictor.predict))
+print("=== feature_columns ===")
+print(predictor.feature_columns)
+print("=== model object type ===")
+print(type(predictor.model))
+
+print("=== model base_score ===")
+try:
+    booster = predictor.model.get_booster() if hasattr(predictor.model, "get_booster") else predictor.model
+    config = booster.save_config()
+    import json as _json
+    cfg = _json.loads(config)
+    print(cfg["learner"]["learner_model_param"]["base_score"])
+except Exception as e:
+    print("Could not read base_score:", e)
+
+print("=== num boosted rounds ===")
+try:
+    print(booster.num_boosted_rounds())
+except Exception as e:
+    print("Could not read num rounds:", e)
+
 shap_engine = BatterySHAP()
 
 recommendation_engine = BatteryRecommendation()
+
+
+import inspect
+print("=== feature_engine.py location ===")
+print(inspect.getfile(BatteryFeatureEngine))
+print("=== reset() signature ===")
+print(inspect.signature(feature_engine.reset))
+print("===================================")
 
 #########################################################
 # Home
@@ -100,6 +135,13 @@ def battery_data():
 
         temperature = float(data["temperature"])
 
+        timestamp = None
+
+        if "timestamp" in data:
+            from datetime import datetime
+            timestamp = datetime.fromisoformat(data["timestamp"])
+
+
         #################################################
         # Store Reading
         #################################################
@@ -110,7 +152,9 @@ def battery_data():
 
             current,
 
-            temperature
+            temperature,
+
+            timestamp
 
         )
 
@@ -221,15 +265,25 @@ def battery_data():
 # Reset Buffer
 #########################################################
 
+#########################################################
+# Reset Buffer
+#########################################################
+
 @app.route("/reset", methods=["POST"])
 
 def reset():
 
-    feature_engine.reset()
+    data = request.get_json(silent=True) or {}
+
+    window_size = data.get("window_size")
+
+    feature_engine.reset(window_size=window_size)
 
     return jsonify({
 
-        "status": "Buffer Reset"
+        "status": "Buffer Reset",
+
+        "window_size": feature_engine.window_size
 
     })
 
@@ -386,6 +440,8 @@ if __name__ == "__main__":
 
         port=5000,
 
-        debug=True
+        debug=True,
+
+        threaded=True
 
     )

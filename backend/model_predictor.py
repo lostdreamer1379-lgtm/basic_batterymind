@@ -13,6 +13,7 @@ import os
 import joblib
 import pandas as pd
 import xgboost as xgb
+import json
 
 
 class BatteryPredictor:
@@ -37,11 +38,26 @@ class BatteryPredictor:
         print("Loading BatteryMind XGBoost Model")
         print("=" * 60)
 
-        # Load XGBoost Model
-        self.model = xgb.XGBRegressor()
+        # Load XGBoost Model via the raw Booster API.
+        self.model = xgb.Booster()
         self.model.load_model(MODEL_PATH)
 
         print("✓ XGBoost Model Loaded")
+
+        # WORKAROUND: this xgboost version does not correctly restore
+        # base_score from the saved JSON into the live Booster config
+        # (it silently reports 0.5 instead of the trained value). Read
+        # the true base_score directly from the JSON file so we can
+        # add it back in manually during prediction.
+        with open(MODEL_PATH) as f:
+            raw_model_json = json.load(f)
+
+        self.correct_base_score = float(
+            raw_model_json["learner"]["learner_model_param"]["base_score"]
+            .strip("[]")
+        )
+
+        print(f"✓ Corrected base_score: {self.correct_base_score}")
 
         # Load feature order
         self.feature_columns = joblib.load(
@@ -89,19 +105,28 @@ class BatteryPredictor:
     ########################################################
     # Predict SOH
     ########################################################
+  
 
     def predict(self, feature_dict):
 
         X = self.prepare_features(feature_dict)
 
-        prediction = self.model.predict(X)
+        dmatrix = xgb.DMatrix(X, feature_names=self.feature_columns)
 
-        soh = float(prediction[0])
+        # This xgboost version doesn't restore base_score correctly
+        # (reports/uses 0.5 instead of the trained 0.8702826), and
+        # output_margin=True doesn't reliably strip it either in this
+        # version. So: get the normal prediction, remove the wrong
+        # base_score, add back the correct one.
+        raw_prediction = float(self.model.predict(dmatrix)[0])
+
+        WRONG_BASE_SCORE = 0.5
+
+        soh = raw_prediction - WRONG_BASE_SCORE + self.correct_base_score
 
         soh = max(0.0, min(1.0, soh))
 
         return soh
-
     ########################################################
     # Health Classification
     ########################################################

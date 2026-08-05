@@ -20,35 +20,40 @@ from datetime import datetime
 
 class BatteryFeatureEngine:
 
-    def __init__(self, window_size=100):
-
+    def __init__(self, window_size=300):
         self.window_size = window_size
-
-        # Rolling buffers
-
         self.voltage_buffer = deque(maxlen=window_size)
         self.current_buffer = deque(maxlen=window_size)
         self.temperature_buffer = deque(maxlen=window_size)
         self.timestamp_buffer = deque(maxlen=window_size)
 
+    def reset(self, window_size=None):
+        """Clear all buffers and optionally resize the window so a
+        new test cycle never gets mixed with leftover readings from
+        the previous one, and never gets silently truncated."""
+        if window_size is not None:
+            self.window_size = window_size
+
+        self.voltage_buffer = deque(maxlen=self.window_size)
+        self.current_buffer = deque(maxlen=self.window_size)
+        self.temperature_buffer = deque(maxlen=self.window_size)
+        self.timestamp_buffer = deque(maxlen=self.window_size)
+
     ###########################################################
     # Buffer Management
     ###########################################################
 
-    def add_reading(self, voltage, current, temperature):
+    def add_reading(self, voltage, current, temperature, timestamp=None):
 
         self.voltage_buffer.append(float(voltage))
         self.current_buffer.append(float(current))
         self.temperature_buffer.append(float(temperature))
 
-        self.timestamp_buffer.append(datetime.now())
+        if timestamp is None:
+            timestamp = datetime.now()
 
-    def reset(self):
-
-        self.voltage_buffer.clear()
-        self.current_buffer.clear()
-        self.temperature_buffer.clear()
-        self.timestamp_buffer.clear()
+        self.timestamp_buffer.append(timestamp)
+        
 
     def size(self):
 
